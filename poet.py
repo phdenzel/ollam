@@ -86,10 +86,8 @@ class Ollam(object):
         self.state['one_hot'] = np_utils.to_categorical(self.state['truth'])
 
         # build default network
-        print(lstm_layers, units, dropout_rate)
         self.brain(lstm_layers=lstm_layers, units=units, dropout_rate=dropout_rate)
         # learn from the text
-        print(learning_cycles, batch_size)
         self.learn(learning_cycles=learning_cycles, batch_size=batch_size, read_only=True)
 
         # some verbosity
