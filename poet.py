@@ -187,7 +187,8 @@ class Ollam(object):
         self.state['ollam_h5'] += "_".join(["{N:}_{do:}".format(
             N=self.state['units'],
             do=self.state['dropout_rate']) for i in range(self.state['lstm_layers'])])
-        self.state['ollam_h5'] += "_{bs:}.h5".format(bs=self.state['batch_size'])
+        self.state['ollam_h5'] += "_{bs:}".format(bs=self.state['batch_size'])
+        self.state['ollam_h5'] += "x{lc:}.h5".format(lc=self.state['learning_cycles'])
         filename = self.state['models_directory'] + self.state['ollam_h5']
         if os.path.exists(filename):
             self.mind.load_weights(filename)
@@ -199,7 +200,7 @@ class Ollam(object):
                 mkdir_p(self.state['models_directory'])
                 self.mind.save_weights(filename)
         if verbose:
-            print("Training of {} cycles completed -> models/{}".format(
+            print("Training of {} cycle(s) completed -> models/{}".format(
                 self.state['learning_cycles'], self.state['ollam_h5']))
 
     def speak(self, length=400, random_seed=1, verbose=True):
