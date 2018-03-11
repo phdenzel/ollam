@@ -9,7 +9,8 @@ Just for fun, I used William Shakespeare's material to train the machine from [[
 
     This program uses following python modules
     - keras
-    - pandas
+    - h5py
+    - tensorflow
     - numpy
 
 *** Usage
