@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+scipy = "*"
+sklearn = "*"
+tensorflow = "*"
+tensorflow-gpu = "*"
+ollam = {editable = true, path = "."}
+
+[dev-packages]
+jupyter = "*"
+
+[requires]
+python_version = "3.9"
