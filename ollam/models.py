@@ -652,7 +652,8 @@ def continue_train(mdl_dir_name, epochs=100, initial_epoch=None,
         return configurator
 
 
-def process(mdl_dir_name, )
+def process(mdl_dir_name, ):
+    pass
 
 
 

@@ -4,7 +4,6 @@
 
 A machine-learning poet
 """
-
 import sys
 import os
 import random
