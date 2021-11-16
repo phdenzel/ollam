@@ -1,14 +1,14 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#org1984af3)
-2.  [Usage](#org632891c)
+1.  [Prerequisites](#org8416431)
+2.  [Usage](#orgf293916)
 
 An attempt to use Natural Language Processing to create an 'artificial poet'.
 Just for fun, I used William Shakespeare's material to train the machine from [http://www.gutenberg.org/ebooks/1041?msg=welcome<sub>stranger</sub>](http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger).
 
 
-<a id="org1984af3"></a>
+<a id="org8416431"></a>
 
 # Prerequisites
 
@@ -20,32 +20,31 @@ This program uses following python modules
 -   numpy
 
 
-<a id="org632891c"></a>
+<a id="orgf293916"></a>
 
 # Usage
 
-    usage: poet.py [-h] [-s <length>] [-l <n_layers>] [-n <n_units>] [-d <rate>] [-e <n_cycles>] [-b <n_steps>] [--verbose-off] [textfile]
-    
-    @author: phdenzel
-    
-    A machine-learning poet
-    
-    positional arguments:
-      textfile              Input path to learning material text file
+    usage: ollam [-h] [-t] [-l <length>] [--optimizer <optimizer>] [--lr <rate>] [-d <rate>] [--epochs <epochs>] [--bs <size>] [--vs <ratio>]
+    	     [--test] [-v <level>]
     
     optional arguments:
       -h, --help            show this help message and exit
-      -s <length>, --sequence_length <length>
-    			length of character sequence used for training
-      -l <n_layers>, --lstm-layers <n_layers>
-    			number of layers in the network
-      -n <n_units>, --units <n_units>
-    			number of neurons per layer in the network
+      -t, --train, --train-mode
+    			Run ollam in train mode.
+      -l <length>, --length <length>, --sequence-length <length>
+    			Length of character sequence used for training.
+      --optimizer <optimizer>
+    			Optimizer function classname for Tensorflow model.
+      --lr <rate>, --learning-rate <rate>
+    			Learning rate for Tensorflow optimization.
       -d <rate>, --dropout-rate <rate>
-    			a dropout rate with which neurons are destroyed
-      -e <n_cycles>, --learning-cycles <n_cycles>
-    			number of epochs in the learning process
-      -b <n_steps>, --batch-size <n_steps>
-    			number of steps with which the learning proceeds
-      --verbose-off         run program in verbose mode
+    			Dropout rate for model training.
+      --epochs <epochs>     Number of epochs for model fitting.
+      --bs <size>, --batch-size <size>
+    			Batch size for model fitting.
+      --vs <ratio>, --val-split <ratio>, --validation-split <ratio>
+    			Validation split ratio for monitoring training session.
+      --test, --test-mode   Run program in testing mode.
+      -v <level>, --verbose <level>
+    			Define level of verbosity
 
