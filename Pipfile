@@ -10,6 +10,7 @@ sklearn = "*"
 tensorflow = "*"
 tensorflow-gpu = "*"
 ollam = {editable = true, path = "."}
+matplotlib = "*"
 
 [dev-packages]
 jupyter = "*"
