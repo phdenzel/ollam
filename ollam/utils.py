@@ -4,8 +4,10 @@ ollam.utils
 @author: phdenzel
 """
 import os
+import csv
 import numpy as np
 from datetime import datetime
+
 import ollam
 
 
@@ -50,6 +52,51 @@ def generate_filename(prefix=None, name_id=None, part_no=None, extension='h5'):
     key = np.base_repr(abs(hash((f'{prefix}_{date}', name_id))), 32)
     fname = f'{prefix}_{date}_{key}_{part_no}.{extension}'
     return fname
+
+def load_text(data_dir=None, data_file_extension='.txt', verbose=False):
+    """
+    Load data text files
+
+    Kwargs:
+        data_dir <str> -
+        data_file_extension <str> -
+        verbose <bool> -
+    """
+    data_dir = os.path.join(ollam.DATA_DIR, 'ollam') if data_dir is None else data_dir
+    ollam.utils.mkdir_p(data_dir)
+    files = [os.path.join(data_dir, f) for f in os.listdir(data_dir)
+             if f.endswith(data_file_extension)]
+    texts = []
+    for textfile in files:
+        with open(textfile, 'r', encoding='utf-8-sig') as f:
+            text = f.read()
+            texts.append(text)
+        if verbose:
+            print(f"Loading {textfile}")
+    return texts
+
+
+def load_csv(csvfile, types=(int, float), verbose=False):
+    """
+    Load csv log files
+
+    Args:
+        csvfile <str> - path to the csv log file
+
+    Kwargs:
+        types <tuple/list> - types of column data fields
+    """
+    d = {}
+    with open(csvfile, 'r') as f:
+        for row in csv.DictReader(f):
+            for i, key in enumerate(row):
+                if key not in d:
+                    d[key] = []
+                typing = types[i] if i < len(types) else types[-1]
+                d[key].append(typing(row[key]))
+        if verbose:
+            print(f"Loading {csvfile}")
+    return d
 
 
 if __name__ == "__main__":
