@@ -24,35 +24,36 @@ def arg_parse():
                    )
     p.add_argument("-l", "--length", "--sequence-length",
                    dest="sequence_length", metavar="<length>", type=int,
-                   default=16,
+                   default=ollam.sequence_length,
                    help="Length of character sequence used for training."
                    )
     p.add_argument("--optimizer",
                    dest="optimizer", metavar="<optimizer>", type=str,
-                   default='Adam',
+                   default=ollam.optimizer,
                    help="Optimizer function classname for Tensorflow model."
                    )
     p.add_argument("--lr", "--learning-rate",
                    dest="learning_rate", metavar="<rate>", type=float,
-                   default=1e-3,
+                   default=ollam.learning_rate,
                    help="Learning rate for Tensorflow optimization."
                    )
     p.add_argument("-d", "--dropout-rate",
                    dest="dropout_rate", metavar="<rate>", type=float,
+                   default=ollam.dropout_rate,
                    help="Dropout rate for model training.")
     p.add_argument("--epochs",
                    dest="epochs", metavar="<epochs>", type=int,
-                   default=50,
+                   default=ollam.epochs,
                    help="Number of epochs for model fitting."
                    )
     p.add_argument("--bs", "--batch-size",
                    dest="batch_size", metavar="<size>", type=int,
-                   default=16,
+                   default=ollam.batch_size,
                    help="Batch size for model fitting."
                    )
     p.add_argument("--vs", "--val-split", "--validation-split",
                    dest="validation_split", metavar="<ratio>", type=float,
-                   default=0.1,
+                   default=ollam.validation_split,
                    help="Validation split ratio for monitoring training session."
                    )
     
@@ -88,6 +89,8 @@ def main():
 
     if args.train_mode:
         from ollam.models import train as main
+    elif args.test_mode:
+        from test import main
     else:
         main = parser.print_help
 
