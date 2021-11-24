@@ -4,6 +4,7 @@ ollam.utils
 @author: phdenzel
 """
 import os
+import re
 import csv
 import numpy as np
 import tensorflow as tf
@@ -27,6 +28,14 @@ def mkdir_p(pathname):
             pass
         else:
             raise
+
+
+def camel_to_snake(name):
+    """
+    Convert from CamelCase to snake_case notation
+    """
+    name = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', name).lower()
 
 
 def generate_filename(prefix=None, name_id=None, part_no=None, extension='h5'):
@@ -70,7 +79,7 @@ def load_texts(data_dir=None, data_file_extension='.txt', verbose=False):
     texts = []
     for textfile in files:
         with open(textfile, 'rb') as f:
-            text = f.read().decode(encoding='utf-8-sig')
+            text = f.read().decode(encoding='utf-8')
             texts.append(text)
         if verbose:
             print(f"Loading {textfile}")

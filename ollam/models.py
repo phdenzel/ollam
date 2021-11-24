@@ -9,13 +9,8 @@ import json
 import inspect
 import numpy as np
 from matplotlib import pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import multilabel_confusion_matrix
 import tensorflow as tf
 from tensorflow.keras import Input
-from tensorflow.keras.utils import to_categorical
-from tensorflow.keras.models import Sequential
 from tensorflow.keras.callbacks import ModelCheckpoint
 from tensorflow.keras.callbacks import EarlyStopping
 from tensorflow.keras.callbacks import CSVLogger
@@ -28,27 +23,41 @@ import ollam
 
 
 class CustomModel(tf.keras.Model):
-    def __init__(self, layer_specs=[], n_labels=None, input_shape=None):
+    def __init__(self, layer_specs=[], n_labels=None, feature_shape=None, name=None):
         """
         Custom tf.keras.Model mindful of states
 
         Kwargs:
             layer_specs <list> - layer specifications for model
             n_labels <int> - number of dimensions for input/output
-            input_shape <tuple> - tensor input shape
+            feature_shape <tuple> - tensor input shape
         """
-        super(__class__, self).__init__(self)
-        layers, args = self.load_specs(layer_specs, n_labels, input_shape)
+        super(CustomModel, self).__init__(name=name)
+        self.layer_specs = layer_specs
+        self.n_labels = n_labels
+        self.feature_shape = feature_shape
+        layers, args = self.load_specs(layer_specs, n_labels, feature_shape)
         self.custom_layers = layers
         self.custom_args = args
 
+    def get_config(self):
+        config = super(__class__, self).get_config()
+        config.update({"layer_specs": self.layer_specs,
+                       "n_labels": self.n_labels,
+                       "feature_shape": self.feature_shape,
+                       "name": self.name})
+        return config
+
+    def from_config(cls, config):
+        return cls(**config)
+
     @classmethod
-    def as_sequential(cls, layer_specs, n_labels=None, input_shape=None):
+    def as_sequential(cls, layer_specs, n_labels=None, feature_shape=None):
         """
         Crate a tf.keras.layers.Sequential model
         """
-        layers, args = cls.load_specs(layer_specs, n_labels, input_shape)
-        model = Sequential()
+        layers, args = cls.load_specs(layer_specs, n_labels, feature_shape)
+        model = tf.keras.Sequential()
         model.custom_layers = layers
         model.custom_args = args
         for layer in model.custom_layers:
@@ -71,14 +80,14 @@ class CustomModel(tf.keras.Model):
         return layer_args
 
     @staticmethod
-    def load_specs(layer_specs, n_labels=None, input_shape=None):
+    def load_specs(layer_specs, n_labels=None, feature_shape=None):
         """
         Args:
             layer_specs <list> - layer specifications for model
 
         Kwargs:
             n_labels <int> - number of dimensions for input/output
-            input_shape <tuple> - tensor input shape
+            feature_shape <tuple> - tensor input shape
 
         Return:
             layers <list> - list of tf.keras.layers instances
@@ -86,8 +95,8 @@ class CustomModel(tf.keras.Model):
         """
         layers = []
         args = []
-        if input_shape is not None:
-            layers.append(Input(shape=input_shape))
+        if feature_shape is not None:
+            layers.append(Input(shape=feature_shape))
         for (type_str, kwargs) in layer_specs:
             layer_type = getattr(tf.keras.layers, type_str)
             layer_args = CustomModel.layer_signature_args(layer_type)
@@ -102,13 +111,13 @@ class CustomModel(tf.keras.Model):
 
     def call(self, inputs, states=None, return_state=False, training=False):
         x = inputs
-        for layer, args in zip(self.custom_layers, self.custom_args):
-            if 'return_state' in args:
+        for i in range(len(self.custom_layers)):
+            if 'return_state' in self.custom_args[i]:
                 if states is None:
-                    states = layer.get_initial_state(x)
-                x, states = layer(x, initial_state=states, training=training)
+                    states = self.custom_layers[i].get_initial_state(x)
+                x, states = self.custom_layers[i](x, initial_state=states, training=training)
             else:
-                x = layer(x, training=training)
+                x = self.custom_layers[i](x, training=training)
         if return_state:
             return x, states
         else:
@@ -135,6 +144,7 @@ class ModelConfigurator(object):
     def __init__(self, dataset=None, label_set=None,
                  onehot_encode=False,
                  sequence_length=None,
+                 save_extension='',
                  random_state=42,
                  verbose=False):
         """
@@ -145,18 +155,22 @@ class ModelConfigurator(object):
             onehot_encode <bool> - one-hot encode label data
             sequence_length <int> - length of dataset sequences
             train_split <float> - perform automatic test-train split
+            save_extension <str> - extension of model filenames
             random_state <int> - random seed
             verbose <bool> - produce logging output
         """
         self.load_data(dataset, label_set=label_set,
                        onehot_encode=onehot_encode)
         self.sequence_length = sequence_length
+        self.save_extension = save_extension
+        if save_extension and not save_extension.startswith('.'):
+            self.save_extension = '.' + self.save_extension
         self.random_state = random_state
         self.configure()
 
     @classmethod
     def from_json(cls, json_file, generate=True, dataset=None,
-                  onehot_encode=True, random_state=42, verbose=False):
+                  onehot_encode=True, verbose=False):
         """
         Args:
             json_file <str> - json file containing model configurations
@@ -166,6 +180,7 @@ class ModelConfigurator(object):
             data <tuple/list> - dataset arrays, e.g. (features, labels)
             train_split <bool> - perform automatic test-train split
             onehot_encode <bool> - one-hot encode label data
+            save_extension <str> - extension of model filenames
             random_state <int> - random seed
             verbose <bool> - produce logging output
 
@@ -179,7 +194,6 @@ class ModelConfigurator(object):
         self = cls(dataset=dataset,
                    onehot_encode=onehot_encode,
                    train_split=train_split,
-                   random_state=random_state,
                    verbose=verbose)
         if generate:
             self.configure(**kwargs).generate()
@@ -214,8 +228,7 @@ class ModelConfigurator(object):
         return dataset, label_set
 
     @classmethod
-    def from_text(cls, text, sequence_length=None,
-                  onehot_encode=True, random_state=42, verbose=False):
+    def from_text(cls, text, sequence_length=None, normalize=False, **kwargs):
         """
         Args:
             text <str> - text file content
@@ -223,6 +236,8 @@ class ModelConfigurator(object):
         Kwargs:
             sequence_length <int> - encoding sequence for labelling
             onehot_encode <bool> - one-hot encode label data
+            normalize <bool> - normalize the data
+            save_extension <str> - extension of model filenames
             random_state <int> - random seed
             verbose <bool> - produce logging output
             
@@ -232,13 +247,11 @@ class ModelConfigurator(object):
         if isinstance(text, (tuple, list)):
             text = "\n\n\n".join(text)
         sequence_length = ollam.sequence_length if sequence_length is None else sequence_length
-        dataset, label_set = cls.encode_text(text, sequence_length)
+        dataset, label_set = cls.encode_text(text, sequence_length, normalize=normalize)
         self = cls(dataset=dataset,
                    label_set=label_set,
                    sequence_length=sequence_length,
-                   onehot_encode=onehot_encode,
-                   random_state=random_state,
-                   verbose=verbose)
+                   **kwargs)
         return self
 
     @classmethod
@@ -383,19 +396,30 @@ class ModelConfigurator(object):
             return np.array(tuple(zip(*self.dataset))[1])
 
     @property
+    def data_batch(self):
+        """
+        Batch and prefetch dataset
+        """
+        dataset = (self.dataset
+                   .shuffle(self.buffer_size)
+                   .batch(self.batch_size, drop_remainder=True)
+                   .prefetch(tf.data.experimental.AUTOTUNE))
+        return dataset
+
+    @property
     def X(self):
-        return self.features
+        return np.array(tuple(zip(*self.data_batch))[0])
 
     @property
     def y(self):
-        return self.labels
+        return np.array(tuple(zip(*self.data_batch))[1])
 
     @property
     def dataset_train(self):
         if self.train_split is not None:
-            n_train = int(self.train_split*len(self.dataset))
-            return self.dataset.take(n_train)
-        return self.dataset
+            n_train = int(self.train_split * len(self.data_batch))
+            return self.data_batch.take(n_train)
+        return self.data_batch
 
     @property
     def X_train(self):
@@ -408,10 +432,10 @@ class ModelConfigurator(object):
     @property
     def dataset_test(self):
         if self.train_split is not None:
-            n_train = int(self.train_split*len(self.dataset))
+            n_train = int(self.train_split * len(self.data_batch))
             n_test = len(self.dataset) - n_train
-            return self.dataset.skip(n_train).take(n_test)
-        return self.dataset
+            return self.data_batch.skip(n_train).take(n_test)
+        return self.data_batch
 
     @property
     def X_test(self):
@@ -427,8 +451,9 @@ class ModelConfigurator(object):
 
         Kwargs:
             basename <str> - unique basename path
-            label_map <dict> - label encoding information;
-                               labels (str) -> index (int)
+            label_set <list> - sorted set of unique labels
+            onehot_encode <bool> - one-hot encode label data
+            save_extension <str> - extension of model filenames
             layer_specs <list(tuple)> - layer specifications;
                                         format: (<layer_type>, <nodes>, <activation>)
             optimizer <str> - appropriate optimizer function name
@@ -448,6 +473,7 @@ class ModelConfigurator(object):
                 ('basename', self.roll_basename()),
                 ('label_set', None),
                 ('onehot_encode', False),
+                ('save_extension', ''),
                 ('train_split', None),
                 ('layer_specs', self.gru_conn),
                 ('optimizer', 'Adam'),
@@ -459,8 +485,7 @@ class ModelConfigurator(object):
                 ('buffer_size', 10000),
                 ('batch_size', None),
                 ('validation_split', 0.1),
-                ('validation_data', None),
-                ('validation', {'accuracy': None, 'confm': None}),]:
+                ('validation', {'loss': None}),]:
             default = dval if not hasattr(self, conf) else self.__getattribute__(conf)
             setattr(self, conf, kwargs.get(conf, default))
         return self
@@ -471,6 +496,7 @@ class ModelConfigurator(object):
             'basename': self.basename,
             'label_set': self.label_set,
             'onehot_encode': self.onehot_encode,
+            'save_extension': self.save_extension,
             'train_split': self.train_split,
             'layer_specs': self.layer_specs,
             'optimizer': self.optimizer,
@@ -482,9 +508,22 @@ class ModelConfigurator(object):
             'buffer_size': self.buffer_size,
             'batch_size': self.batch_size,
             'validation_split': self.validation_split,
-            'validation_data': self.validation_data,
             'validation': self.validation,
         }
+
+    @property
+    def optimizer_func(self):
+        return getattr(tf.keras.optimizers, self.optimizer)(
+            learning_rate=self.learning_rate)
+
+    @property
+    def loss_func(self):
+        return getattr(tf.losses, self.loss)(
+            from_logits=self.from_logits)
+
+    @property
+    def metrics_funcs(self):
+        return [getattr(tf.metrics, m)() for m in self.metrics]
 
     def sequential(self, **kwargs):
         """
@@ -507,7 +546,7 @@ class ModelConfigurator(object):
             verbose <bool> - print information to stdout
 
         Return:
-            model <tf.keras.models.Sequential>
+            model <tf.keras.Sequential>
         """
         verbose = kwargs.pop('verbose', False)
         self.configure(**kwargs)
@@ -517,12 +556,11 @@ class ModelConfigurator(object):
         output_shape = self.dataset.element_spec[1].shape
         model = CustomModel.as_sequential(self.layer_specs,
                                           n_labels=n_labels,
-                                          input_shape=input_shape)
-        opt = getattr(tf.keras.optimizers, self.optimizer)(
-            learning_rate=self.learning_rate)
-        loss = getattr(tf.keras.losses, self.loss)(
-            from_logits=self.from_logits)
-        model.compile(optimizer=opt, loss=loss, metrics=self.metrics)
+                                          feature_shape=input_shape)
+        opt = self.optimizer_func
+        loss = self.loss_func
+        metrics = self.metrics_funcs
+        model.compile(optimizer=opt, loss=loss, metrics=metrics)
         if verbose:
             model.summary()
         return model
@@ -553,20 +591,18 @@ class ModelConfigurator(object):
         verbose = kwargs.pop('verbose', False)
         self.configure(**kwargs)
         n_layers = len(self.layer_specs)
-        n_labels = len(self.label_set)
+        n_labels = len(self.label_map.get_vocabulary())
         input_shape = self.dataset.element_spec[0].shape
         output_shape = self.dataset.element_spec[1].shape
         model = CustomModel(self.layer_specs,
                             n_labels=n_labels,
-                            input_shape=None)
-        opt = getattr(tf.keras.optimizers, self.optimizer)(
-            learning_rate=self.learning_rate)
-        loss = getattr(tf.keras.losses, self.loss)(
-            from_logits=self.from_logits)
-        model.compile(optimizer=opt, loss=loss, metrics=self.metrics)
+                            feature_shape=None)
+        opt = self.optimizer_func
+        loss = self.loss_func
+        metrics = self.metrics_funcs
+        model.compile(optimizer=opt, loss=loss, metrics=metrics)
         if verbose:
-            print(model)
-            # model.summary(input_shape)
+            self.model_summary(verbose=verbose)
         return model
 
     def generate(self, gen_type='custom', **kwargs):
@@ -589,7 +625,7 @@ class ModelConfigurator(object):
             verbose <bool> - print information to stdout
 
         Return:
-            model <tf.keras.models.Sequential>
+            model <tf.keras.Sequential>
         """
         if gen_type == 'custom':
             self.model = self.custom(**kwargs)
@@ -605,11 +641,7 @@ class ModelConfigurator(object):
         if not hasattr(self, 'model'):
             self.generate()
         # run on test batch
-        dataset = (
-            self.dataset
-            .shuffle(self.buffer_size)
-            .batch(self.batch_size, drop_remainder=True)
-            .prefetch(tf.data.experimental.AUTOTUNE))
+        dataset = self.dataset_train
 
         for input_take, target_take in dataset.take(1):
             example_predictions = self.model(input_take)
@@ -620,21 +652,6 @@ class ModelConfigurator(object):
                 print(example_predictions.shape, shape_str)
         if verbose:
             self.model.summary()
-
-    def data_batch(self, training=True):
-        if training:
-            dataset = (
-                self.dataset_train
-                .shuffle(self.buffer_size)
-                .batch(self.batch_size, drop_remainder=True)
-                .prefetch(tf.data.experimental.AUTOTUNE))
-        else:
-            dataset = (
-                self.dataset
-                .shuffle(self.buffer_size)
-                .batch(self.batch_size, drop_remainder=True)
-                .prefetch(tf.data.experimental.AUTOTUNE))
-        return dataset
 
     def train_model(self, initial_epoch=0,
                     callbacks=[],
@@ -661,6 +678,7 @@ class ModelConfigurator(object):
             save <bool> - save model and its configurations
             verbose <bool> - print information to stdout
         """
+        # configure from input
         self.configure(**kwargs)
         log_dir = ollam.LOG_DIR
         ollam.utils.mkdir_p(log_dir)
@@ -668,15 +686,22 @@ class ModelConfigurator(object):
         ollam.utils.mkdir_p(mdl_dir)
 
         # set up training dataset batches
-        dataset = self.data_batch(training=True)
+        dataset = self.dataset_train
 
         # callbacks
         if checkpoint_callback:
-            cp_callback = ModelCheckpoint(self.basename+'_model{epoch:04d}_cp.h5',
-                                          monitor='val_'+self.metrics[0],
-                                          save_best_only=True, mode='max',
-                                          verbose=False)
-            
+            ckpt_marker = '_cp{}'.format(self.save_extension)
+            ckpt_path = self.basename + '_model{epoch:04d}'
+            if not self.save_extension.endswith('h5'):
+                ckpt_path = os.path.join(ckpt_path+'_cp', 'model{epoch:04d}')
+            ckpt_path = ckpt_path + ckpt_marker
+            save_weights_only = True if not self.save_extension.endswith('h5') else False
+            cp_callback = ModelCheckpoint(ckpt_path,
+                                          save_weights_only=save_weights_only,
+                                          monitor='val_'+ollam.utils.camel_to_snake(self.metrics[0]),
+                                          mode='max',
+                                          save_best_only=True,
+                                          )
             callbacks.append(cp_callback)
         if earlystop_callback:
             es_callback = EarlyStopping(monitor='val_'+self.metrics[0],
@@ -693,17 +718,27 @@ class ModelConfigurator(object):
             self.generate()
 
         # fit model
-        history = self.model.fit(dataset,
-                                 epochs=self.epochs,
-                                 validation_split=self.validation_split,
-                                 initial_epoch=initial_epoch,
-                                 callbacks=callbacks)
+        training_specs = {
+            'epochs': self.epochs,
+            'initial_epoch': initial_epoch,
+            'callbacks': callbacks}
+        if isinstance(dataset, (np.ndarray, tf.Tensor)):
+            training_specs['validation_split'] = self.validation_split
+        elif self.validation_split:
+            n_data = len(dataset)
+            n_val = int(self.validation_split * n_data)
+            n_train = n_data - n_val
+            dataset_val = dataset.skip(n_train).take(n_val)
+            training_specs['validation_data'] = dataset_val
+            dataset = dataset.take(n_train)
+        history = self.model.fit(dataset, **training_specs)
         self.history = history.history
         
         if make_plots:
             self.performance_plots(savename=self.basename+'_tperf_{}.pdf')
-        # archive model+log files and clean up
-        self.basename = self.archive_model(model_dir=mdl_dir, log_dir=log_dir)
+        # archive and save model+log files
+        if archive:
+            self.basename = self.archive_model(model_dir=mdl_dir, log_dir=log_dir)
         if save:
             self.save(verbose=verbose)
         return self.history
@@ -773,35 +808,37 @@ class ModelConfigurator(object):
         """
         model_dir = os.path.dirname(self.basename) if model_dir is None else model_dir
         log_dir = ollam.LOG_DIR if log_dir is None else log_dir
-        # move models into archive directory
-        mdl_name = self.basename.split('_')[2] #+ f'_{self.optimizer}'
-        mdl_files = [f for f in os.listdir(model_dir)
-                     if os.path.isfile(os.path.join(model_dir, f))]
+        mdl_name = self.basename.split('_')[2]
         archive_dir = os.path.join(model_dir, mdl_name)
+        # move models into archive directory
         ollam.utils.mkdir_p(archive_dir)
+        mdl_files = [f for f in os.listdir(model_dir)
+                     if os.path.isfile(os.path.join(model_dir, f))
+                     or f.endswith('cp')]
         for f in mdl_files:
             fsrc = os.path.join(model_dir, f)
             fdst = os.path.join(archive_dir, f)
             os.rename(fsrc, fdst)
         # handle checkpoint files
-        basename = os.path.join(archive_dir,
-                                os.path.basename(self.basename))
-        if os.path.isfile(basename+'_model_cp.h5'):
-            os.remove(basename+'_model_cp.h5')
+        basename = os.path.join(archive_dir, os.path.basename(self.basename))
+        ckpt_marker = 'cp{}'.format(self.save_extension)
+        ckpt_path = basename + '_model_' + ckpt_marker
+        if os.path.isfile(ckpt_path):
+            os.remove(ckpt_path)
         cp_files = sorted([fmdl for fmdl in os.listdir(archive_dir)
-                           if fmdl.endswith('cp.h5')])
+                           if fmdl.endswith(ckpt_marker)])
         if not intermediate_checkpoints:
             for f in cp_files[:-1]:
-                os.remove(os.path.join(archive_dir, f))
+                shutil.rmtree(os.path.join(archive_dir, f))
         for f in cp_files[-1:]:
-            shutil.copy2(os.path.join(archive_dir, f), basename+'_model_cp.h5')
+            shutil.copytree(os.path.join(archive_dir, f), ckpt_path)
         # archive log directory
         mdl_log_dir = os.path.join(archive_dir, os.path.basename(log_dir))
         shutil.copytree(log_dir, mdl_log_dir, dirs_exist_ok=True)
         shutil.rmtree(log_dir)
         return basename
 
-    def save(self, directory=None, overwrite=True, verbose=False):
+    def save(self, weights_only=False, directory=None, overwrite=True, verbose=False):
         """
         Save configs and model
 
@@ -820,12 +857,15 @@ class ModelConfigurator(object):
             if verbose:
                 print(f"Writing to {jsnf}")
         if overwrite:
-            modelfile = self.basename+'_model.h5'
-            self.model.save(modelfile)
+            modelfile = self.basename+'_model{}'.format(self.save_extension)
+            if modelfile.endswith('h5'):
+                self.model.save(modelfile)
+            else:
+                self.model.save_weights(modelfile)
             if verbose:
                 print(f"Writing to {modelfile}")
 
-    def load_model(self, from_checkpoints=False, verbose=False):
+    def load_model(self, save_extension=None, from_checkpoints=False, verbose=False):
         """
         Load model from either last model state or checkpoint
 
@@ -833,18 +873,27 @@ class ModelConfigurator(object):
             from_checkpoints <bool> - load the checkpoint saves instead
             verbose <bool> - print information to stdout
         """
-        model_filename = self.basename+'_model.h5'
-        cp_filename = self.basename+'_model_cp.h5'
-        if from_checkpoints and os.path.isfile(self.basename+'_model_cp.h5'):
-            self.model = tf.keras.models.load_model(self.basename+'_model_cp.h5')
+        if save_extension is not None:
+            self.save_extension = save_extension
+        model_filename = self.basename+'_model{}'.format(self.save_extension)
+        cp_filename = self.basename+'_model_cp{}'.format(self.save_extension)
+        # print(model_filename)
+        # print(cp_filename)
+        if not hasattr(self, 'model'):
+            self.generate()
+        if from_checkpoints and os.path.exists(cp_filename):
+            self.model.load_weights(cp_filename)
             if verbose:
-                print("Loading", self.basename+'_model_cp.h5')
-        elif os.path.isfile(self.basename+'_model.h5'):
-            self.model = tf.keras.models.load_model(self.basename+'_model.h5')
+                print("Loading", cp_filename)
+        elif os.path.isfile(model_filename):
+            if not hasattr(self, 'model'):
+                self.generate()
+            self.model = tf.keras.models.load_model(model_filename)
             if verbose:
-                print("Loading", self.basename+'_model.h5')
-        if os.path.isfile(self.basename+'_history.log'):
-            self.history = ollam.utils.load_csv(self.basename+'_history.log',
+                print("Loading", model_filename)
+        history_filename = self.basename+'_history.log'
+        if os.path.isfile(history_filename):
+            self.history = ollam.utils.load_csv(history_filename,
                                                 verbose=verbose)
 
     def validate(self, verbose=False):
@@ -854,15 +903,21 @@ class ModelConfigurator(object):
         Kwargs:
             verbose <bool> - print information to stdout
         """
-        y_hat = self.model.predict(self.X_test)
-        y_hat = np.argmax(y_hat, axis=1).tolist()
-        y_true = np.argmax(self.y_test, axis=1).tolist()
-        self.validation['accuracy'] = accuracy_score(y_true, y_hat)
-        self.validation['confm'] = \
-            multilabel_confusion_matrix(y_true, y_hat).tolist()
-        if verbose:
-            print("Accuracy:        \t{}".format(self.validation['accuracy']))
-            print("Confusion matrix:\t{}".format(self.validation['confm']))
+        # set up training dataset batches
+        dataset = self.dataset_test
+        for test_feature, test_label in dataset.take(1):
+            # inference
+            yhat = self.model(test_feature, return_state=False, training=False)
+            # loss and metrics
+            batch_loss = self.loss_func(test_label, yhat)
+            batch_metrics = [f(test_label, yhat) for f in self.metrics_funcs]
+            mean_loss = batch_loss.numpy().mean().astype(float)
+            mean_metrics = [b.numpy().mean().astype(float) for b in batch_metrics]
+            self.validation['loss'] = mean_loss
+            self.validation['metrics'] = mean_metrics
+            if verbose:
+                print("Mean of loss   \t", mean_loss)
+                print("Mean of metrics\t", mean_metrics)
 
 
 def train(data_dir=None, return_obj=True, **kwargs):
@@ -874,45 +929,51 @@ def train(data_dir=None, return_obj=True, **kwargs):
     onehot_encode = kwargs.pop('onehot_encode', False)
     sequence_length = kwargs.pop('sequence_length', ollam.sequence_length)
     random_state = kwargs.pop('random_state', 8)
-    verbose = kwargs.pop('verbose', True)
+    verbose = kwargs.pop('verbose', 2)
 
     model_type = 'custom'
     kwargs.setdefault('layer_specs', ModelConfigurator.gru_conn)
     kwargs.setdefault('optimizer', ollam.optimizer)
     kwargs.setdefault('learning_rate', ollam.learning_rate)
     kwargs.setdefault('loss', 'SparseCategoricalCrossentropy')
+    kwargs.setdefault('metrics', ['SparseCategoricalAccuracy'])
     kwargs.setdefault('from_logits', True)
     kwargs.setdefault('epochs', ollam.epochs)
-    kwargs.setdefault('train_split', None)
+    kwargs.setdefault('train_split', 0.95)
     kwargs.setdefault('batch_size', ollam.batch_size)
     kwargs.setdefault('validation_split', ollam.validation_split)
 
     if verbose:
-        print(f"# ModelConfigurator: {model_type}")
+        print(f"### ModelConfigurator: {model_type}")
 
     texts = ollam.utils.load_texts(data_dir, verbose=verbose)
     configurator = ModelConfigurator.from_text(
-        texts, sequence_length=sequence_length, onehot_encode=onehot_encode)
+        texts, sequence_length=sequence_length,
+        onehot_encode=onehot_encode, normalize=False)
     configurator.configure(**kwargs)
     if verbose:
-        print("Configs:")
+        print("### Configs:")
         pprint.pprint(configurator.configs)
     configurator.generate(model_type, verbose=verbose)
 
-    configurator.model_summary(verbose=1)
+    if verbose:
+        print("### Testing model on data")
+        configurator.validate(verbose=verbose)
 
-    # configurator.train_model(checkpoint_callback=True,
-    #                          tensor_board_callback=True,
-    #                          save=True,
-    #                          verbose=verbose)
-    # if verbose:
-    #     print(f"# Validation (Epoch {configurator.epochs})")
-    # configurator.validate(verbose=verbose)
-    # validation_end = configurator.validation.copy()
-    # if verbose:
-    #     print("# Validation (Checkpoint)")
-    # configurator.load_model(from_checkpoints=True)
-    # configurator.validate(verbose=verbose)
+    configurator.train_model(checkpoint_callback=True,
+                             tensor_board_callback=False,
+                             archive=True,
+                             save=True,
+                             verbose=verbose)
+
+    if verbose:
+        print(f"# Validation (Epoch {configurator.epochs})")
+    configurator.validate(verbose=verbose)
+
+    if verbose:
+        print("# Validation (Checkpoint)")
+    configurator.load_model(from_checkpoints=True, verbose=verbose)
+    configurator.validate(verbose=verbose)
     # validation_cp = configurator.validation.copy()
     # configurator.save(overwrite=False)
     # if return_obj:

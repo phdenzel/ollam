@@ -25,11 +25,11 @@ LOG_DIR = os.path.join(DOT_DIR, "log")
 TMP_DIR = os.path.join(DOT_DIR, "tmp")
 
 
-sequence_length = 16
+sequence_length = 100
 optimizer = 'Adam'
-learning_rate = 0.001
+learning_rate = 0.01
 dropout_rate = 0.2
 epochs = 50
-batch_size = 16
+batch_size = 64
 buffer_size = 10000
 validation_split = 0.1
