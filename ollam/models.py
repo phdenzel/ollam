@@ -23,7 +23,7 @@ import ollam
 
 
 class CustomModel(tf.keras.Model):
-    def __init__(self, layer_specs=[], n_labels=None, feature_shape=None, name=None):
+    def __init__(self, layer_specs=[], n_labels=None, feature_shape=None, **kwargs):
         """
         Custom tf.keras.Model mindful of states
 
@@ -32,7 +32,7 @@ class CustomModel(tf.keras.Model):
             n_labels <int> - number of dimensions for input/output
             feature_shape <tuple> - tensor input shape
         """
-        super(CustomModel, self).__init__(name=name)
+        super(CustomModel, self).__init__(**kwargs)
         self.layer_specs = layer_specs
         self.n_labels = n_labels
         self.feature_shape = feature_shape
@@ -40,13 +40,26 @@ class CustomModel(tf.keras.Model):
         self.custom_layers = layers
         self.custom_args = args
 
+    def call(self, inputs, states=None, return_state=False, training=False):
+        x = inputs
+        for i in range(len(self.custom_layers)):
+            if 'return_state' in self.custom_args[i]:
+                if states is None:
+                    states = self.custom_layers[i].get_initial_state(x)
+                x, states = self.custom_layers[i](x, initial_state=states, training=training)
+            else:
+                x = self.custom_layers[i](x, training=training)
+        if return_state:
+            return x, states
+        else:
+            return x
+
     def get_config(self):
-        config = super(__class__, self).get_config()
-        config.update({"layer_specs": self.layer_specs,
-                       "n_labels": self.n_labels,
-                       "feature_shape": self.feature_shape,
-                       "name": self.name})
-        return config
+        base_config = super(__class__, self).get_config()
+        return {**base_config,
+                "layer_specs": self.layer_specs,
+                "n_labels": self.n_labels,
+                "feature_shape": self.feature_shape}
 
     def from_config(cls, config):
         return cls(**config)
@@ -108,20 +121,6 @@ class CustomModel(tf.keras.Model):
             layers.append(layer)
             args.append(layer_args)
         return layers, args
-
-    def call(self, inputs, states=None, return_state=False, training=False):
-        x = inputs
-        for i in range(len(self.custom_layers)):
-            if 'return_state' in self.custom_args[i]:
-                if states is None:
-                    states = self.custom_layers[i].get_initial_state(x)
-                x, states = self.custom_layers[i](x, initial_state=states, training=training)
-            else:
-                x = self.custom_layers[i](x, training=training)
-        if return_state:
-            return x, states
-        else:
-            return x
 
 
 class ModelConfigurator(object):
@@ -191,9 +190,9 @@ class ModelConfigurator(object):
             kwargs = json.load(f)
             if verbose:
                 print("Loading ", json_file)
-        self = cls(dataset=dataset,
+        label_set = kwargs.pop('label_set', None)
+        self = cls(dataset=dataset, label_set=label_set,
                    onehot_encode=onehot_encode,
-                   train_split=train_split,
                    verbose=verbose)
         if generate:
             self.configure(**kwargs).generate()
@@ -319,7 +318,7 @@ class ModelConfigurator(object):
         features = np.array(tuple(zip(*dataset))[0])
         labels = np.array(tuple(zip(*dataset))[1])
         if label_set is None:
-            label_set = sorted(set(labels))
+            label_set = sorted(set(list(labels)))
         if onehot_encode:
             labels = tf.one_hot(labels, len(label_set)).numpy()
         dataset = tf.data.Dataset.from_tensor_slices((features, labels))
@@ -384,6 +383,18 @@ class ModelConfigurator(object):
                                    index (int) -> labels (str)
         """
         self._inference_map = inference_map
+
+    @property
+    def save_extension(self):
+        if not hasattr(self, '_save_extension'):
+            self._save_extension = ''
+        return self._save_extension
+
+    @save_extension.setter
+    def save_extension(self, extension):
+        if extension and not extension.startswith('.'):
+            extension = '.' + extension
+        self._save_extension = extension
 
     @property
     def features(self):
@@ -690,14 +701,12 @@ class ModelConfigurator(object):
 
         # callbacks
         if checkpoint_callback:
-            ckpt_marker = '_cp{}'.format(self.save_extension)
             ckpt_path = self.basename + '_model{epoch:04d}'
-            if not self.save_extension.endswith('h5'):
-                ckpt_path = os.path.join(ckpt_path+'_cp', 'model{epoch:04d}')
+            ckpt_marker = '_cp.h5'
             ckpt_path = ckpt_path + ckpt_marker
-            save_weights_only = True if not self.save_extension.endswith('h5') else False
+            # save_weights_only = False if not '.' in self.save_extension else False
             cp_callback = ModelCheckpoint(ckpt_path,
-                                          save_weights_only=save_weights_only,
+                                          save_weights_only=True,
                                           monitor='val_'+ollam.utils.camel_to_snake(self.metrics[0]),
                                           mode='max',
                                           save_best_only=True,
@@ -762,7 +771,7 @@ class ModelConfigurator(object):
         if savename is None:
             savename = 'training_performance.pdf'
         fig, ax = plt.subplots()
-        key = metrics[0]
+        key = ollam.utils.camel_to_snake(metrics[0])
         if key in history:
             ax.plot(history[key], c='#6767FF', label='train')
         key = 'val_'+key
@@ -814,31 +823,36 @@ class ModelConfigurator(object):
         ollam.utils.mkdir_p(archive_dir)
         mdl_files = [f for f in os.listdir(model_dir)
                      if os.path.isfile(os.path.join(model_dir, f))
-                     or f.endswith('cp')]
+                     or f.endswith('cp') or (f.endswith(self.save_extension) if self.save_extension else False)]
         for f in mdl_files:
             fsrc = os.path.join(model_dir, f)
             fdst = os.path.join(archive_dir, f)
             os.rename(fsrc, fdst)
         # handle checkpoint files
         basename = os.path.join(archive_dir, os.path.basename(self.basename))
-        ckpt_marker = 'cp{}'.format(self.save_extension)
+        ckpt_marker = 'cp.h5'
         ckpt_path = basename + '_model_' + ckpt_marker
         if os.path.isfile(ckpt_path):
             os.remove(ckpt_path)
-        cp_files = sorted([fmdl for fmdl in os.listdir(archive_dir)
+        cp_files = sorted([os.path.join(archive_dir, fmdl)
+                           for fmdl in os.listdir(archive_dir)
                            if fmdl.endswith(ckpt_marker)])
         if not intermediate_checkpoints:
             for f in cp_files[:-1]:
                 shutil.rmtree(os.path.join(archive_dir, f))
         for f in cp_files[-1:]:
-            shutil.copytree(os.path.join(archive_dir, f), ckpt_path)
+            if os.path.isdir(f):
+                shutil.copytree(f, ckpt_path)
+            elif os.path.isfile(f):
+                shutil.copy2(f, ckpt_path)
         # archive log directory
         mdl_log_dir = os.path.join(archive_dir, os.path.basename(log_dir))
         shutil.copytree(log_dir, mdl_log_dir, dirs_exist_ok=True)
         shutil.rmtree(log_dir)
         return basename
 
-    def save(self, weights_only=False, directory=None, overwrite=True, verbose=False):
+    def save(self, save_model=True, save_extension='', weights_only=False,
+             directory=None, verbose=False):
         """
         Save configs and model
 
@@ -853,17 +867,20 @@ class ModelConfigurator(object):
             basename = self.basename
         jsnf = basename+'_configs.json'
         with open(jsnf, 'w') as f:
-            json.dump(self.configs, f)
             if verbose:
                 print(f"Writing to {jsnf}")
-        if overwrite:
-            modelfile = self.basename+'_model{}'.format(self.save_extension)
-            if modelfile.endswith('h5'):
-                self.model.save(modelfile)
-            else:
-                self.model.save_weights(modelfile)
+            json.dump(self.configs, f)
+        # save keras model
+        if save_model:
+            modelfile = self.basename+'_model{}'.format(save_extension)
             if verbose:
                 print(f"Writing to {modelfile}")
+            if weights_only:
+                self.model.save_weights(modelfile, save_format='tf')
+            if modelfile.endswith('h5') or modelfile.endswith('h5py') or modelfile.endswith('hdf5'):
+                tf.keras.models.save_model(self.model, modelfile, save_format='h5')
+            else:
+                self.model.save(modelfile, save_format='tf')
 
     def load_model(self, save_extension=None, from_checkpoints=False, verbose=False):
         """
@@ -876,9 +893,7 @@ class ModelConfigurator(object):
         if save_extension is not None:
             self.save_extension = save_extension
         model_filename = self.basename+'_model{}'.format(self.save_extension)
-        cp_filename = self.basename+'_model_cp{}'.format(self.save_extension)
-        # print(model_filename)
-        # print(cp_filename)
+        cp_filename = self.basename+'_model_cp{}'.format('.h5')
         if not hasattr(self, 'model'):
             self.generate()
         if from_checkpoints and os.path.exists(cp_filename):
@@ -933,6 +948,7 @@ def train(data_dir=None, return_obj=True, **kwargs):
 
     model_type = 'custom'
     kwargs.setdefault('layer_specs', ModelConfigurator.gru_conn)
+    kwargs.setdefault('save_extension', '')
     kwargs.setdefault('optimizer', ollam.optimizer)
     kwargs.setdefault('learning_rate', ollam.learning_rate)
     kwargs.setdefault('loss', 'SparseCategoricalCrossentropy')
@@ -974,25 +990,107 @@ def train(data_dir=None, return_obj=True, **kwargs):
         print("# Validation (Checkpoint)")
     configurator.load_model(from_checkpoints=True, verbose=verbose)
     configurator.validate(verbose=verbose)
-    # validation_cp = configurator.validation.copy()
-    # configurator.save(overwrite=False)
-    # if return_obj:
-    #     return configurator
-    # else:
-    #     del configurator
-    #     tf.keras.backend.clear_session()
-    #     return validation_cp, validation_end    
+    validation_cp = configurator.validation.copy()
+    configurator.save(save_model=False)
+    if return_obj:
+        return configurator
+    else:
+        del configurator
+        tf.keras.backend.clear_session()
+        return validation_cp, validation_end
+
+
+def load_from_archive(model_dir_name, data_dir=None, **kwargs):
+    """
+    Load a model from previously archived json and hdf5 files
+    """
+    model_dir = os.path.join(ollam.MDL_DIR, model_dir_name)
+    data_dir = ollam.DATA_DIR if data_dir is None else data_dir
+    sequence_length = kwargs.pop('sequence_length', ollam.sequence_length)
+    onehot_encode = kwargs.pop('onehot_encode', False)
+    train_split = kwargs.pop('train_split', False)
+    random_state = kwargs.pop('random_state', 8)
+    from_checkpoints = kwargs.pop('from_checkpoints', True)
+    verbose = kwargs.pop('verbose', 2)
+
+    if verbose:
+        print(f"# ModelConfigurator: load from {model_dir_name}")
+
+    texts = ollam.utils.load_texts(data_dir, verbose=verbose)
+    dataset, _ = ModelConfigurator.encode_text(texts[0], sequence_length)
+    configurator = ModelConfigurator.from_archive(model_dir_name,
+                                                  dataset=dataset,
+                                                  onehot_encode=onehot_encode,
+                                                  verbose=verbose)
+    return configurator
+
+
+def continue_train(model_dir_name, epochs=100, initial_epoch=None,
+                   data_dir=None, return_obj=True, **kwargs):
+    """
+    Continue training a model from previously archived hdf5 file
+    """
+    verbose = kwargs.get('verbose', 2)
+    configurator = load_from_archive(model_dir_name, from_checkpoints=False, **kwargs)
+    configurator.model_summary()
+    configurator.load_model(from_checkpoints=True)
+    initial_epoch = configurator.epochs if initial_epoch is None else initial_epoch
+    configurator.epochs = epochs
+    configurator.train_model(initial_epoch=initial_epoch,
+                             checkpoint_callback=True,
+                             tensor_board_callback=False,
+                             save=True,
+                             verbose=verbose)
+    if return_obj:
+        return configurator
+
+
+# def process(model_dir_name,
+#             length=400,
+#             init=None,
+#             random_seed=None,
+#             from_checkpoints=False,
+#             **kwargs):
+#     """
+#     Load a model and use it to process initial input data
+#     """
+#     verbose = kwargs.get('verbose', True)
+#     if random_seed is not None:
+#         np.random.seed(random_seed)
+#     configurator = load_from_archive(model_dir_name,
+#                                      from_checkpoints=from_checkpoints,
+#                                      **kwargs)
+#     inference_map = configurator.inv_label_map
+#     norm = float(len(inference_map))
+#     sequence_length = configurator.X.shape[1]
+#     if init is None:
+#         init_word = ollam.utils.excerpt_from_encoded(configurator.X,
+#                                                      decoder=inference_map)
+#         init_word = ollam.utils.trim_to_word(init_word)
+#     else:
+#         init_word = list(init)[:sequence_length]
+#     text = ollam.utils.whitespace_pad(init_word, sequence_length)
+#     sequence = ollam.utils.encode_sequence(text, encoder=configurator.label_map)
+#     for _ in range(length):
+#         pred_prob = configurator.model.predict(sequence.copy(), verbose=0)
+#         pred_key = np.argmax(pred_prob)
+#         sequence[:, :-1, :] = sequence[:, 1:, :]
+#         sequence[:, -1, :] = pred_key / norm
+#         char = inference_map[pred_key]
+#         text.append(char)
+#     if verbose:
+#         print("".join(text))
+#     return text
 
 
 if __name__ == "__main__":
-    train()
+    # train()
 
-    
-    # continue_train('6C7LES4K13HL9', epochs=200, initial_epoch=150)
+    if 0:
+        continue_train('7A4M7OQBMJRNB', epochs=120)
 
-    # configurator = load_from_archive('4BQ0JB4TEA2E7')
-    # configurator.performance_plots(save=False)
-    # plt.show()
-
-    process('6C7LES4K13HL9', 200, from_checkpoints=True)
-    # process('6C7LES4K13HL9', 400, init='in the forest he', from_checkpoints=True)
+    if 1:
+        configurator = load_from_archive('7A4M7OQBMJRNB')
+        print(configurator.configs)
+        configurator.performance_plots(save=True)
+        plt.show()
