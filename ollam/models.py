@@ -644,23 +644,28 @@ class ModelConfigurator(object):
             self.model = self.sequential(**kwargs)
         return self.model
 
-    def model_summary(self, verbose=True):
+    def activate(self):
         """
         Print model summary to stdout
         """
-        # generate a model if not already done
         if not hasattr(self, 'model'):
             self.generate()
         # run on test batch
         dataset = self.dataset_train
-
         for input_take, target_take in dataset.take(1):
             example_predictions = self.model(input_take)
-            shape_str = "# (batch_size, sequence_length, label_set_size)"
-            if len(example_predictions.shape) == 2:
-                shape_str = "# (sequence_length, label_set_size)"
-            if verbose > 1:
-                print(example_predictions.shape, shape_str)
+        return example_predictions
+
+    def model_summary(self, verbose=True):
+        """
+        Print model summary to stdout
+        """
+        example_predictions = self.activate()
+        shape_str = "# (batch_size, sequence_length, label_set_size)"
+        if len(example_predictions.shape) == 2:
+            shape_str = "# (sequence_length, label_set_size)"
+        if verbose > 1:
+            print(example_predictions.shape, shape_str)
         if verbose:
             self.model.summary()
 
@@ -890,6 +895,7 @@ class ModelConfigurator(object):
             from_checkpoints <bool> - load the checkpoint saves instead
             verbose <bool> - print information to stdout
         """
+        self.activate()
         if save_extension is not None:
             self.save_extension = save_extension
         model_filename = self.basename+'_model{}'.format(self.save_extension)
@@ -933,6 +939,13 @@ class ModelConfigurator(object):
             if verbose:
                 print("Mean of loss   \t", mean_loss)
                 print("Mean of metrics\t", mean_metrics)
+
+    @property
+    def compose_args(self):
+        """
+        Arguments for ComposeStep
+        """
+        return self.model, self.label_map, self.inference_map
 
 
 def train(data_dir=None, return_obj=True, **kwargs):
@@ -1044,43 +1057,6 @@ def continue_train(model_dir_name, epochs=100, initial_epoch=None,
     if return_obj:
         return configurator
 
-
-# def process(model_dir_name,
-#             length=400,
-#             init=None,
-#             random_seed=None,
-#             from_checkpoints=False,
-#             **kwargs):
-#     """
-#     Load a model and use it to process initial input data
-#     """
-#     verbose = kwargs.get('verbose', True)
-#     if random_seed is not None:
-#         np.random.seed(random_seed)
-#     configurator = load_from_archive(model_dir_name,
-#                                      from_checkpoints=from_checkpoints,
-#                                      **kwargs)
-#     inference_map = configurator.inv_label_map
-#     norm = float(len(inference_map))
-#     sequence_length = configurator.X.shape[1]
-#     if init is None:
-#         init_word = ollam.utils.excerpt_from_encoded(configurator.X,
-#                                                      decoder=inference_map)
-#         init_word = ollam.utils.trim_to_word(init_word)
-#     else:
-#         init_word = list(init)[:sequence_length]
-#     text = ollam.utils.whitespace_pad(init_word, sequence_length)
-#     sequence = ollam.utils.encode_sequence(text, encoder=configurator.label_map)
-#     for _ in range(length):
-#         pred_prob = configurator.model.predict(sequence.copy(), verbose=0)
-#         pred_key = np.argmax(pred_prob)
-#         sequence[:, :-1, :] = sequence[:, 1:, :]
-#         sequence[:, -1, :] = pred_key / norm
-#         char = inference_map[pred_key]
-#         text.append(char)
-#     if verbose:
-#         print("".join(text))
-#     return text
 
 
 if __name__ == "__main__":

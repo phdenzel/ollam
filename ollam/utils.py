@@ -145,7 +145,7 @@ def join_chars(characters, encoding=None):
         return characters
     elif isinstance(characters, bytes):
         return characters.decode(enc)
-    return tf.strings.reduce_join(characters, axis=-1).numpy().decode(enc)
+    return tf.strings.join(characters)[0].numpy().decode(encoding)
 
 
 def io_from_sequence(sequence):
@@ -229,7 +229,8 @@ def whitespace_pad(characters, length, encoding=None):
     return characters
 
 
-def encode_chars(characters, encoder=None, normalize=False):
+def encode_chars(characters, encoder=None, normalize=False,
+                 string_encoding=None):
     """
     Encode list of characters into a sequence of numbers
 
@@ -244,7 +245,7 @@ def encode_chars(characters, encoder=None, normalize=False):
         sequence <np.ndarray> - 
     """
     if isinstance(characters, str):
-        characters = split_string(characters)
+        characters = split_string(characters, encoding=string_encoding)
     elif isinstance(characters, (list, np.ndarray)):
         characters = tf.constant(characters)
     if encoder is None:

@@ -14,8 +14,16 @@ def arg_parse():
     p = ArgumentParser(prog='ollam', #description=__doc__,
                        formatter_class=RawTextHelpFormatter)
 
-    # General flags
-    
+    p.add_argument("-c", "--compose",
+                   dest="compose", metavar="<init_string>", type=str,
+                   default='',
+                   help="Run ollam in compose mode, based on initial input."
+                   )
+    p.add_argument("-n", "--n-chars", "--number-of-chars", "--number-of-characters",
+                   dest="n_chars", metavar="<number>", type=int,
+                   default=1000,
+                   help="Number of characters for text generation."
+                   )
 
     # Model training flags
     p.add_argument("-t", "--train", "--train-mode",
@@ -72,7 +80,8 @@ def overwrite_dg_vars(args):
     Args:
         args <Namespace>
     """
-    
+    ollam.init_string = args.compose
+    ollam.n_chars = args.n_chars
     ollam.sequence_length = args.sequence_length
 
     ollam.optimizer = args.optimizer
@@ -91,6 +100,8 @@ def main():
         from ollam.models import train as main
     elif args.test_mode:
         from test import main
+    elif args.compose:
+        from ollam.compose import compose as main
     else:
         main = parser.print_help
 
