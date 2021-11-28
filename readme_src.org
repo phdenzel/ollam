@@ -1,9 +1,9 @@
 #+AUTHOR: phdenzel
 #+TITLE: ollam
 
-An attempt to use Natural Language Processing to create an 'artificial
-poet'.  Just for fun, I used William Shakespeare's material to train
-the machine from
+An attempt to use RNNs in the context of Natural Language Processing
+to create an 'artificial poet', i.e. a text generator.  Just for fun,
+I used William Shakespeare's material to train the machine from
 [[http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger][http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger]].
 
 
@@ -13,6 +13,22 @@ the machine from
     - tensorflow/keras
     - numpy
     - h5py, json, csv
+
+*** Install
+
+For now, this program runs only from source. To install, clone the
+repository, and create a virtual environment with
+#+BEGIN_SRC shell
+pipenv install
+pipenv install -e .
+#+END_SRC
+
+To activate the virtual environment run
+#+BEGIN_SRC shell
+pipenv shell
+#+END_SRC
+
+or start every command with ~pipenv run~.
 
 *** Example
 

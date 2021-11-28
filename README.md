@@ -1,17 +1,18 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#org81cf381)
-2.  [Example](#orgc5d022c)
-3.  [Usage](#orgfeba8fa)
+1.  [Prerequisites](#org936f781)
+2.  [Install](#orgf67beb2)
+3.  [Example](#orgb680aca)
+4.  [Usage](#org94509e6)
 
-An attempt to use Natural Language Processing to create an 'artificial
-poet'.  Just for fun, I used William Shakespeare's material to train
-the machine from
+An attempt to use RNNs in the context of Natural Language Processing
+to create an 'artificial poet', i.e. a text generator.  Just for fun,
+I used William Shakespeare's material to train the machine from
 [http://www.gutenberg.org/ebooks/1041?msg=welcome<sub>stranger</sub>](http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger).
 
 
-<a id="org81cf381"></a>
+<a id="org936f781"></a>
 
 # Prerequisites
 
@@ -22,7 +23,24 @@ This program mainly uses following python3 modules
 -   h5py, json, csv
 
 
-<a id="orgc5d022c"></a>
+<a id="orgf67beb2"></a>
+
+# Install
+
+For now, this program runs only from source. To install, clone the
+repository, and create a virtual environment with
+
+    pipenv install
+    pipenv install -e .
+
+To activate the virtual environment run
+
+    pipenv shell
+
+or start every command with `pipenv run`.
+
+
+<a id="orgb680aca"></a>
 
 # Example
 
@@ -84,7 +102,7 @@ use to generate more text:
     Gook fairly ne'er show'd, and when let me alone.
 
 
-<a id="orgfeba8fa"></a>
+<a id="org94509e6"></a>
 
 # Usage
 
