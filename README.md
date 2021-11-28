@@ -1,34 +1,105 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#org8416431)
-2.  [Usage](#orgf293916)
+1.  [Prerequisites](#orgadf8fbf)
+2.  [Example](#org45e7ae7)
+3.  [Usage](#orgee15ecc)
 
-An attempt to use Natural Language Processing to create an 'artificial poet'.
-Just for fun, I used William Shakespeare's material to train the machine from [http://www.gutenberg.org/ebooks/1041?msg=welcome<sub>stranger</sub>](http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger).
+An attempt to use Natural Language Processing to create an 'artificial
+poet'.  Just for fun, I used William Shakespeare's material to train
+the machine from
+[http://www.gutenberg.org/ebooks/1041?msg=welcome<sub>stranger</sub>](http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger).
 
 
-<a id="org8416431"></a>
+<a id="orgadf8fbf"></a>
 
 # Prerequisites
 
-This program uses following python modules
+This program mainly uses following python3 modules
 
--   keras
--   h5py
--   tensorflow
+-   tensorflow/keras
 -   numpy
+-   h5py, json, csv
 
 
-<a id="orgf293916"></a>
+<a id="org45e7ae7"></a>
+
+# Example
+
+First, we generate and train a custom model for about 30 epochs:
+
+    $ ollam -t -l 100 --optimizer Adam --lr 0.001 --epochs 30 --bs 128
+    
+    ...
+    Writing /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_history.log
+    Writing /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_configs.json
+    Writing /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_model
+
+Longer training runs might yield better results, but with 30 epochs,
+the model already learned most words and some syntax.  The time needed
+for training mainly depends on the hardware of your machine. In my
+case, training on an overclocked Nvidia GeForce GTX 1080Ti, the above
+command finishes in roughly 5 minutes.
+
+Once the training is finished, we can go ahead and give an initial
+word or sentence (in this case "OLLAM") to the model, which it will
+use to generate more text:
+
+    $ ollam -c "OLLAM" -n 1000
+    
+    Loading /home/phdenzel/.ollam/data/shakespeare.txt
+    Loading /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_configs.json
+    Loading /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_history.log
+    Mean of loss   	 0.17293328046798706
+    Mean of metrics	 [0.9461718797683716]
+    OLLAM:
+    He must be true!
+    
+    LADY CAPULET:
+    Ay, you remain am not in mine awish:' beat me, nurse, sound;
+    And do you not rene requit thy power,
+    And death' my father Well, Grumio, rise,
+    Her name is on the sea, hath leisure you infercy
+    behasitied back against him bite,
+    And len the tresp so much as they were made to reaph
+    Dine up our paration, alike you for his country:
+    It shall be possessed with a leavier than you can,
+    My evils conferl'd to Romeo will be dead.
+    
+    EDWARD:
+    O, sir, he comes to you and yours, as to this Prince!
+    
+    KING EDWARD IV:
+    What, Warwick, wilt thou leave the town and fight
+    With reverend day of an in high entertain
+    Achieve to his unmurtures: show'd unto more
+    Should sing and pale, the tiger of right.
+    Would Kath thy true love's truth in priest of man
+    Should we'll car clamp again: were we may glad to die.
+    
+    ESCALUS:
+    But the law will not to your purpet!
+    So flatters us with wings on you
+    Would be put on their people traitor,
+    Gook fairly ne'er show'd, and when let me alone.
+
+
+<a id="orgee15ecc"></a>
 
 # Usage
 
-    usage: ollam [-h] [-t] [-l <length>] [--optimizer <optimizer>] [--lr <rate>] [-d <rate>] [--epochs <epochs>] [--bs <size>] [--vs <ratio>]
-    	     [--test] [-v <level>]
+    usage: ollam [-h] [-c <init_string>] [-n <number>] [-t] [-l <length>]
+    	     [--optimizer <optimizer>] [--lr <rate>] [-d <rate>]
+    	     [--epochs <epochs>] [--bs <size>] [--vs <ratio>] [--test]
+    	     [-v <level>]
     
     optional arguments:
       -h, --help            show this help message and exit
+      -c <init_string>, --compose <init_string>
+    			Run ollam in compose mode, based on initial input.
+      -n <number>, --n-chars <number>, --number-of-chars <number>, 
+    	       --number-of-characters <number>
+    			Number of characters in generated text.
       -t, --train, --train-mode
     			Run ollam in train mode.
       -l <length>, --length <length>, --sequence-length <length>
