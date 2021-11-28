@@ -18,7 +18,7 @@ the machine from
 
 First, we generate and train a custom model for about 30 epochs:
 #+BEGIN_SRC shell
-$ ollam -t -l 100 --optimizer Adam --lr 0.001 --epochs 30 --bs 128
+phdenzel@phoenix:~/ollam#master$ ollam -t -l 100 --optimizer Adam --lr 0.001 --epochs 30 --bs 128
 
 ...
 Writing /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_history.log
@@ -36,7 +36,7 @@ Once the training is finished, we can go ahead and give an initial
 word or sentence (in this case "OLLAM") to the model, which it will
 use to generate more text:
 #+BEGIN_SRC shell
-$ ollam -c "OLLAM" -n 1000
+phdenzel@phoenix:~/ollam#master$ ollam -c "OLLAM" -n 1000
 
 Loading /home/phdenzel/.ollam/data/shakespeare.txt
 Loading /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_configs.json

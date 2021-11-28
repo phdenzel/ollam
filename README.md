@@ -1,9 +1,9 @@
 
 # Table of Contents
 
-1.  [Prerequisites](#orgadf8fbf)
-2.  [Example](#org45e7ae7)
-3.  [Usage](#orgee15ecc)
+1.  [Prerequisites](#org81cf381)
+2.  [Example](#orgc5d022c)
+3.  [Usage](#orgfeba8fa)
 
 An attempt to use Natural Language Processing to create an 'artificial
 poet'.  Just for fun, I used William Shakespeare's material to train
@@ -11,7 +11,7 @@ the machine from
 [http://www.gutenberg.org/ebooks/1041?msg=welcome<sub>stranger</sub>](http://www.gutenberg.org/ebooks/1041?msg=welcome_stranger).
 
 
-<a id="orgadf8fbf"></a>
+<a id="org81cf381"></a>
 
 # Prerequisites
 
@@ -22,13 +22,13 @@ This program mainly uses following python3 modules
 -   h5py, json, csv
 
 
-<a id="org45e7ae7"></a>
+<a id="orgc5d022c"></a>
 
 # Example
 
 First, we generate and train a custom model for about 30 epochs:
 
-    $ ollam -t -l 100 --optimizer Adam --lr 0.001 --epochs 30 --bs 128
+    phdenzel@phoenix:~/ollam#master$ ollam -t -l 100 --optimizer Adam --lr 0.001 --epochs 30 --bs 128
     
     ...
     Writing /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_history.log
@@ -45,7 +45,7 @@ Once the training is finished, we can go ahead and give an initial
 word or sentence (in this case "OLLAM") to the model, which it will
 use to generate more text:
 
-    $ ollam -c "OLLAM" -n 1000
+    phdenzel@phoenix:~/ollam#master$ ollam -c "OLLAM" -n 1000
     
     Loading /home/phdenzel/.ollam/data/shakespeare.txt
     Loading /home/phdenzel/.ollam/models/7A4M7OQBMJRNB/ollam_211125_7A4M7OQBMJRNB_configs.json
@@ -84,7 +84,7 @@ use to generate more text:
     Gook fairly ne'er show'd, and when let me alone.
 
 
-<a id="orgee15ecc"></a>
+<a id="orgfeba8fa"></a>
 
 # Usage
 
